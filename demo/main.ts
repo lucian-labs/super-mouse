@@ -59,7 +59,9 @@ function padSection() {
       'wl-muted',
       'Move, click, drag and scroll inside the screen. Nothing below is wired to a ' +
         'listener — every value is read off the SuperMouse instance once per frame. ' +
-        'u and v are normalised against the element, so 0,0 is its top-left corner.'
+        'u and v are normalised against the element, so 0,0 is its top-left corner. ' +
+        'The border turns gold while the pane is capturing: the wheel scrolls this ' +
+        'screen instead of the page, and dragging across it will not select text.'
     )
   )
 
@@ -211,9 +213,20 @@ function padSection() {
     oButtons.setAttribute('value', `${down.length ? down.join(',') : '—'} / ${mouse.clicked}`)
     oFlags.setAttribute('value', `${mouse.dragging} / ${mouse.onElement}`)
 
-    hud.setAttribute('tl', mouse.clicked ? 'DOWN' : mouse.onElement ? 'TRACKING' : 'IDLE')
+    // The armed border is the house rule for a surface that has taken over an
+    // input device: while the pointer is on this pane, the library is eating
+    // the wheel and the drag, so the page will not scroll or select. Say so.
+    // See brand-design.md, "a surface that captures input says so".
+    ;(hud as HTMLElement & { capturing: boolean }).capturing = mouse.onElement
+
+    hud.setAttribute('tl', mouse.clicked ? 'DOWN' : mouse.onElement ? 'CAPTURING' : 'IDLE')
     hud.setAttribute('tr', `U ${mouse.u.toFixed(3)} V ${mouse.v.toFixed(3)}`)
-    hud.setAttribute('bl', `INERTIA ${mouse.inertia.toFixed(4)}`)
+    hud.setAttribute(
+      'bl',
+      mouse.onElement
+        ? `WHEEL + DRAG CAPTURED · INERTIA ${mouse.inertia.toFixed(4)}`
+        : `INERTIA ${mouse.inertia.toFixed(4)}`
+    )
 
     // the library's own decay step
     mouse.update(dt)
