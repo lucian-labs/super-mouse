@@ -1,16 +1,28 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💕</text></svg>"
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>super-mouse — @dank-inc/super-mouse</title>
+    <meta
+      name="description"
+      content="Interactive demo of @dank-inc/super-mouse — a pointer-state object with normalised coordinates and decaying inertia."
     />
-    <link rel="stylesheet" href="./index.css" />
-    <title>Super Mouse Demo</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="https://ds.lucianlabs.ca/waveloop.css" />
+    <script type="module" src="https://ds.lucianlabs.ca/waveloop.js"></script>
   </head>
   <body>
-    <canvas></canvas>
-    <script src="./index.ts" type="module"></script>
+    <wl-demo
+      sub="super-mouse"
+      wordmark="super mouse"
+      version="0.11.0"
+      accent="blue"
+      repo-name="super-mouse"
+      tagline="A pointer-state object you read in your render loop instead of wiring six listeners: normalised coordinates, button map, scroll accumulators and decaying inertia."
+    >
+      <div id="app"></div>
+    </wl-demo>
+    <script type="module" src="./main.ts"></script>
   </body>
 </html>

@@ -27,7 +27,9 @@
     "build": "vite build",
     "lint": "tsc --noEmit",
     "clean": "rm -rf lib",
-    "deploy": "npm run clean && tsc && npm publish"
+    "deploy": "npm run clean && tsc && npm publish",
+    "demo": "vite --config vite.demo.config.ts",
+    "demo:build": "vite build --config vite.demo.config.ts"
   },
   "devDependencies": {
     "typescript": "^5.7.2",
