@@ -42,7 +42,10 @@ function frame(dt: number) {
   draw(mouse.u, mouse.v, mouse.inertia)
   mouse.update(dt)   // decays inertia; call once per frame
   requestAnimationFrame(() => frame(dt))
-}`
+}
+
+// on unmount / hot reload
+mouse.destroy()`
   s.append(install, c)
 }
 
@@ -56,7 +59,7 @@ function padSection() {
       'wl-muted',
       'Move, click, drag and scroll inside the screen. Nothing below is wired to a ' +
         'listener — every value is read off the SuperMouse instance once per frame. ' +
-        'Note that u and v are normalised against the window, not the element.'
+        'u and v are normalised against the element, so 0,0 is its top-left corner.'
     )
   )
 
@@ -131,9 +134,9 @@ function padSection() {
     const dt = Math.min((now - last) / 16.67, 4)
     last = now
 
-    const box = hud.getBoundingClientRect()
-    const lx = (mouse.x - box.left) * dpr
-    const ly = (mouse.y - box.top) * dpr
+    // u/v are element-normalised, so the canvas position is just a scale
+    const lx = mouse.u * canvas.width
+    const ly = mouse.v * canvas.height
 
     if ((trailSel as HTMLElement & { checked: boolean }).checked && mouse.onElement) {
       trail.push({ x: lx, y: ly, hot: mouse.clicked })
@@ -228,15 +231,17 @@ function apiSection() {
   ;(api as HTMLElement & { rows: unknown }).rows = [
     { name: 'new SuperMouse', kind: 'class', signature: '(params: SuperMouseParams) => SuperMouse', about: 'Binds listeners to params.element on construction.' },
     { name: '.x / .y', kind: 'property', signature: 'number', about: 'Latest clientX / clientY, in viewport pixels.' },
-    { name: '.u / .v', kind: 'property', signature: 'number', about: 'Position normalised against window.innerWidth / innerHeight.' },
+    { name: '.u / .v', kind: 'property', signature: 'number', about: 'Position normalised against the element box: 0,0 top-left, 1,1 bottom-right.' },
     { name: '.inertia', kind: 'property', signature: 'number', about: 'Accumulated movement energy, decayed by update().' },
     { name: '.scrollX / .scrollY', kind: 'property', signature: 'number', about: 'Accumulated wheel delta, inverted and scaled by scrollScale.' },
     { name: '.scrollInertia', kind: 'property', signature: 'number', about: 'Accumulated wheel energy, decayed by update().' },
     { name: '.buttons', kind: 'property', signature: 'Record<number, boolean>', about: 'Per-button down state, keyed by MouseEvent.button.' },
     { name: '.clicked', kind: 'getter', signature: 'boolean', about: 'True while any button is down.' },
-    { name: '.keys', kind: 'property', signature: 'Record<string, boolean>', about: 'Keyboard map. See the review note on keyup.' },
+    { name: '.keys', kind: 'property', signature: 'Record<string, boolean>', about: 'Keyboard map, true while held. Bound to window unless you pass keyTarget.' },
+    { name: '.dragging', kind: 'property', signature: 'boolean', about: 'True once the pointer moves past dragThreshold with a button held.' },
     { name: '.onElement', kind: 'property', signature: 'boolean', about: 'True between mouseenter and mouseleave.' },
-    { name: '.update', kind: 'method', signature: '(dt?: number) => void', about: 'Decays both inertia values. Call once per frame.' },
-    { name: 'onClick / onMove / onRelease / onScroll / onEnter / onLeave / onContext', kind: 'callback', signature: '(e) => void', about: 'Optional hooks fired alongside the state update.' },
+    { name: '.update', kind: 'method', signature: '(dt?: number) => void', about: 'Decays both inertia values by 0.97 ^ (dt * updateScale). Call once per frame.' },
+    { name: '.destroy', kind: 'method', signature: '() => void', about: 'Removes every listener the constructor added.' },
+    { name: 'onClick / onDoubleClick / onMove / onRelease / onScroll / onEnter / onLeave / onContext', kind: 'callback', signature: '(e) => void', about: 'Optional hooks fired alongside the state update.' },
   ]
 }

@@ -1,0 +1,15 @@
+{
+  // Type-check the demo against the real public API too — the emit config is
+  // narrowed to src so the published lib never picks up demo files.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@dank-inc/super-mouse": ["./src"]
+    }
+  },
+  "include": ["src", "demo/main.ts"]
+}

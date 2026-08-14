@@ -5,11 +5,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v4
         with:
-          node-version: 14.x
+          node-version: 20.x
+          cache: npm
 
-      - run: npm i
+      - run: npm ci
       - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run demo:build

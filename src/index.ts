@@ -1,10 +1,19 @@
 export type SuperMouseParams = {
   element: HTMLElement
+  /**
+   * Where keyboard listeners are bound. Defaults to `window`, because an
+   * element only receives key events while focused and the usual targets
+   * (canvas, div) are not focusable without a tabindex.
+   */
+  keyTarget?: HTMLElement | Window
   debug?: boolean
   enableContext?: boolean
   scrollScale?: number
   updateScale?: number
+  /** Pixels the pointer must travel while held before `dragging` flips true. */
+  dragThreshold?: number
   onClick?: (e: MouseEvent) => void
+  onDoubleClick?: (e: MouseEvent) => void
   onMove?: (e: MouseEvent) => void
   onRelease?: (e: MouseEvent) => void
   onScroll?: (e: WheelEvent) => void
@@ -16,20 +25,27 @@ export type SuperMouseParams = {
 type MouseButtons = Record<number, boolean>
 type KeyMap = Record<string, boolean>
 
-export interface SuperMouse {
-  x: number
-  y: number
-  u: number
-  v: number
-  scrollInertia: number
-  scrollX: number
-  scrollY: number
-  inertia: number
+export class SuperMouse {
+  // position
+  x = 0
+  y = 0
+  u = 0
+  v = 0
+
+  // scroll behavior
+  scrollX = 0
+  scrollY = 0
+  scrollInertia = 0
+
+  // phyiscs
+  inertia = 0
 
   scrollScale: number
   updateScale: number
+  dragThreshold: number
 
   onClick?: (e: MouseEvent) => void
+  onDoubleClick?: (e: MouseEvent) => void
   onMove?: (e: MouseEvent) => void
   onRelease?: (e: MouseEvent) => void
   onScroll?: (e: WheelEvent) => void
@@ -37,24 +53,29 @@ export interface SuperMouse {
   onLeave?: () => void
   onContext?: () => void
 
-  started: boolean
+  started = false
   debug: boolean
-  dragging: boolean
-  buttons: MouseButtons
-  keys: KeyMap
+  dragging = false
+  buttons: MouseButtons = {}
+  keys: KeyMap = {}
   element: HTMLElement
-  onElement: boolean
+  keyTarget: HTMLElement | Window
+  onElement = false
   enableContext: boolean
-}
 
-export class SuperMouse {
+  // where the pointer was when the first button went down, for the drag test
+  private pressOrigin: { x: number; y: number } | null = null
+
   constructor({
     debug,
     enableContext,
     element,
+    keyTarget,
     scrollScale,
     updateScale,
+    dragThreshold,
     onClick,
+    onDoubleClick,
     onMove,
     onRelease,
     onScroll,
@@ -62,33 +83,18 @@ export class SuperMouse {
     onLeave,
     onContext,
   }: SuperMouseParams) {
-    // position
-    this.x = 0
-    this.y = 0
-    this.u = 0
-    this.v = 0
-
-    // scroll behavior
-    this.scrollX = 0
-    this.scrollInertia = 0
-    this.scrollY = 0
-
-    // phyiscs
-    this.inertia = 0
-
-    this.started = false
     this.debug = !!debug
-    this.dragging = false
-    this.buttons = {}
-    this.keys = {}
+    this.enableContext = !!enableContext
 
-    this.onElement = false
     this.element = element
+    this.keyTarget = keyTarget ?? window
 
     this.scrollScale = scrollScale ?? 1
     this.updateScale = updateScale ?? 1
+    this.dragThreshold = dragThreshold ?? 3
 
     this.onClick = onClick
+    this.onDoubleClick = onDoubleClick
     this.onMove = onMove
     this.onRelease = onRelease
     this.onScroll = onScroll
@@ -96,30 +102,24 @@ export class SuperMouse {
     this.onLeave = onLeave
     this.onContext = onContext
 
-    this.enableContext = !!enableContext
-
-    // keydown => mapping object
-    // keyup => mapping object
-
-    // or not
-    this.element.addEventListener("keydown", (e) => (this.keys[e.key] = true))
-    this.element.addEventListener("keyup", (e) => (this.keys[e.key] = true))
+    this.keyTarget.addEventListener("keydown", this.handleKeyDown)
+    this.keyTarget.addEventListener("keyup", this.handleKeyUp)
 
     this.element.addEventListener("mousedown", this.handleClick)
     this.element.addEventListener("mousemove", this.handleMove)
-    this.element.addEventListener("mouseup", this.handleRelease)
-    this.element.addEventListener("wheel", this.handleScroll)
+    this.element.addEventListener("dblclick", this.handleDoubleClick)
+    // handleScroll never calls preventDefault, so there is nothing to gain
+    // from making the compositor wait on it
+    this.element.addEventListener("wheel", this.handleScroll, { passive: true })
 
-    this.element.addEventListener("mouseenter", () => (this.onElement = true))
-    this.element.addEventListener("mouseleave", () => (this.onElement = false))
+    this.element.addEventListener("mouseenter", this.handleEnter)
+    this.element.addEventListener("mouseleave", this.handleLeave)
+    this.element.addEventListener("contextmenu", this.handleContext)
 
-    this.element.addEventListener("doubleclick", () => {})
-
-    this.element.addEventListener("contextmenu", (e) => {
-      if (!this.enableContext) e.preventDefault()
-
-      this.onContext?.()
-    })
+    // release and blur are window-scoped: a button released (or the tab lost)
+    // outside the element must still clear, or `buttons` latches down forever
+    window.addEventListener("mouseup", this.handleRelease)
+    window.addEventListener("blur", this.handleBlur)
   }
 
   // GETTERS
@@ -130,25 +130,73 @@ export class SuperMouse {
 
   // HANDLERS
 
+  handleKeyDown = (e: Event) => {
+    if (!(e instanceof KeyboardEvent)) return
+    this.keys[e.key] = true
+  }
+
+  handleKeyUp = (e: Event) => {
+    if (!(e instanceof KeyboardEvent)) return
+    this.keys[e.key] = false
+  }
+
   handleClick = (e: MouseEvent) => {
     this.buttons[e.button] = true
+    this.pressOrigin = { x: e.clientX, y: e.clientY }
     if (this.debug) console.log("SuperMouse.click =>", e, this)
 
     this.onClick?.(e)
   }
 
+  handleDoubleClick = (e: MouseEvent) => {
+    if (this.debug) console.log("SuperMouse.doubleClick =>", e, this)
+
+    this.onDoubleClick?.(e)
+  }
+
   handleRelease = (e: MouseEvent) => {
+    // the listener is on window so a release outside the element still clears,
+    // but that also means we see every release on the page - only the ones
+    // matching a press this instance recorded are ours to report
+    if (!this.buttons[e.button]) return
+
     this.buttons[e.button] = false
+    if (!this.clicked) {
+      this.dragging = false
+      this.pressOrigin = null
+    }
     if (this.debug) console.log("SuperMouse.release =>", e, this)
 
     this.onRelease?.(e)
   }
 
-  handleScroll = (e: WheelEvent) => {
-    const ctrl = e.ctrlKey
-    const shift = e.shiftKey
+  handleEnter = () => {
+    this.onElement = true
+    this.onEnter?.()
+  }
 
-    this.scrollInertia += e.deltaY + e.deltaX
+  handleLeave = () => {
+    this.onElement = false
+    this.onLeave?.()
+  }
+
+  handleContext = (e: Event) => {
+    if (!this.enableContext) e.preventDefault()
+
+    this.onContext?.()
+  }
+
+  // losing the window drops the keyup/mouseup we would otherwise wait for
+  handleBlur = () => {
+    this.buttons = {}
+    this.keys = {}
+    this.dragging = false
+    this.pressOrigin = null
+  }
+
+  handleScroll = (e: WheelEvent) => {
+    // same inversion and scale as scrollX/scrollY, so all three agree
+    this.scrollInertia += (e.deltaY + e.deltaX) * -1 * this.scrollScale
 
     this.scrollX += e.deltaX * -1 * this.scrollScale
     this.scrollY += e.deltaY * -1 * this.scrollScale
@@ -164,26 +212,59 @@ export class SuperMouse {
     this.x = e.clientX
     this.y = e.clientY
 
-    this.u = this.x / window.innerWidth
-    this.v = this.y / window.innerHeight
+    // normalized against the element the listeners are bound to, so u/v are
+    // usable as-is for drawing into it
+    const rect = this.element.getBoundingClientRect()
+    this.u = rect.width ? (this.x - rect.left) / rect.width : 0
+    this.v = rect.height ? (this.y - rect.top) / rect.height : 0
 
-    if (!this.started) {
+    if (this.started) {
+      const force = (lastU - this.u) ** 2 + (lastV - this.v) ** 2
+      this.inertia += force * 50
+    } else {
+      // first move has no previous sample, so there is no delta to square
       this.started = true
-      return
     }
 
-    const force = (lastU - this.u) ** 2 + (lastV - this.v) ** 2
-    this.inertia += force * 50
+    if (!this.dragging && this.pressOrigin && this.clicked) {
+      const dx = this.x - this.pressOrigin.x
+      const dy = this.y - this.pressOrigin.y
+      if (Math.hypot(dx, dy) > this.dragThreshold) this.dragging = true
+    }
 
     if (this.debug) console.log("SuperMouse.move", this.u, this.v)
 
     this.onMove?.(e)
   }
 
+  /**
+   * Decays both inertia values. Call once per frame.
+   * `dt` is in frames (1 = one 60fps frame), so decay stays stable at any
+   * frame rate and `updateScale` scales how fast it falls off.
+   */
   update = (dt = 1) => {
-    this.inertia *= 0.97 * dt * this.updateScale
-    this.scrollInertia *= 0.97 * dt * this.updateScale
+    const decay = Math.pow(0.97, dt * this.updateScale)
+    this.inertia *= decay
+    this.scrollInertia *= decay
 
     if (this.debug) console.log("SuperMouse.update", this.inertia)
+  }
+
+  /** Removes every listener this instance registered. */
+  destroy = () => {
+    this.keyTarget.removeEventListener("keydown", this.handleKeyDown)
+    this.keyTarget.removeEventListener("keyup", this.handleKeyUp)
+
+    this.element.removeEventListener("mousedown", this.handleClick)
+    this.element.removeEventListener("mousemove", this.handleMove)
+    this.element.removeEventListener("dblclick", this.handleDoubleClick)
+    this.element.removeEventListener("wheel", this.handleScroll)
+
+    this.element.removeEventListener("mouseenter", this.handleEnter)
+    this.element.removeEventListener("mouseleave", this.handleLeave)
+    this.element.removeEventListener("contextmenu", this.handleContext)
+
+    window.removeEventListener("mouseup", this.handleRelease)
+    window.removeEventListener("blur", this.handleBlur)
   }
 }

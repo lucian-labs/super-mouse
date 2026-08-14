@@ -23,16 +23,20 @@
     "creative"
   ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "tsc --noEmit",
+    "dev": "vite --config vite.demo.config.ts",
+    "build": "npm run clean && tsc",
+    "lint": "tsc --noEmit -p tsconfig.lint.json",
+    "test": "vitest run",
     "clean": "rm -rf lib",
-    "deploy": "npm run clean && tsc && npm publish",
+    "prepublishOnly": "npm run lint && npm test && npm run build",
+    "deploy": "npm publish",
     "demo": "vite --config vite.demo.config.ts",
     "demo:build": "vite build --config vite.demo.config.ts"
   },
   "devDependencies": {
+    "jsdom": "^29.1.1",
     "typescript": "^5.7.2",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^4.1.10"
   }
 }
