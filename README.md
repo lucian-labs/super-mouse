@@ -48,6 +48,8 @@ mouse.destroy()
 | `scrollScale` | `1` | multiplies wheel deltas into `scrollX`, `scrollY` and `scrollInertia` |
 | `updateScale` | `1` | scales the decay rate applied by `update()` |
 | `dragThreshold` | `3` | pixels the pointer must travel while a button is held before `dragging` flips true |
+| `captureScroll` | `true` | stops a wheel over the element from also scrolling the page — the deltas already drive `scrollX`/`scrollY`, so letting both happen means one gesture drives two things |
+| `captureDrag` | `true` | stops a drag that starts on the element from selecting page text or beginning a native image drag |
 | `onClick` | — | `(e: MouseEvent) => void`, on mousedown |
 | `onDoubleClick` | — | `(e: MouseEvent) => void`, on dblclick |
 | `onMove` | — | `(e: MouseEvent) => void` |
@@ -57,6 +59,13 @@ mouse.destroy()
 | `onContext` | — | `() => void`, on contextmenu |
 
 Every callback is also a writable instance property, so `mouse.onClick = fn` after construction works.
+
+
+The two `capture*` options exist because this library takes over an element's
+pointer interaction. By default the element keeps the gesture: a wheel over a
+canvas drives that canvas, not the document behind it, and a drag across it is
+a gesture rather than a text selection. Set either to `false` where the element
+is ordinary inline content and the page should still respond normally.
 
 ## State
 

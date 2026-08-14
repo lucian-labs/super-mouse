@@ -259,3 +259,57 @@ describe("destroy", () => {
     expect(mouse.scrollY).toBe(0)
   })
 })
+
+describe("event capture", () => {
+  // jsdom honours preventDefault on a cancelable event, so defaultPrevented is
+  // a faithful proxy for "the page would not have scrolled / selected".
+  const wheel = (el: HTMLElement) => {
+    const e = new WheelEvent("wheel", {
+      deltaY: 100,
+      bubbles: true,
+      cancelable: true,
+    })
+    el.dispatchEvent(e)
+    return e
+  }
+
+  const press = (el: HTMLElement) => {
+    const e = new MouseEvent("mousedown", {
+      button: 0,
+      bubbles: true,
+      cancelable: true,
+    })
+    el.dispatchEvent(e)
+    return e
+  }
+
+  it("stops a wheel over the element from scrolling the page by default", () => {
+    const { element, mouse } = build()
+    const e = wheel(element)
+    expect(e.defaultPrevented).toBe(true)
+    // still consumed as scroll state — capturing must not cost the reading
+    expect(mouse.scrollY).not.toBe(0)
+  })
+
+  it("lets the wheel through when captureScroll is false", () => {
+    const { element, mouse } = build({ captureScroll: false })
+    const e = wheel(element)
+    expect(e.defaultPrevented).toBe(false)
+    expect(mouse.scrollY).not.toBe(0)
+  })
+
+  it("stops a drag on the element from selecting page text by default", () => {
+    const { element, mouse } = build()
+    const e = press(element)
+    expect(e.defaultPrevented).toBe(true)
+    // the press is still recorded
+    expect(mouse.clicked).toBe(true)
+  })
+
+  it("leaves selection alone when captureDrag is false", () => {
+    const { element, mouse } = build({ captureDrag: false })
+    const e = press(element)
+    expect(e.defaultPrevented).toBe(false)
+    expect(mouse.clicked).toBe(true)
+  })
+})

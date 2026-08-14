@@ -12,6 +12,22 @@ export type SuperMouseParams = {
   updateScale?: number
   /** Pixels the pointer must travel while held before `dragging` flips true. */
   dragThreshold?: number
+  /**
+   * Keep a wheel over the element from also scrolling the page. Defaults to
+   * true: this library turns wheel deltas into `scrollX`/`scrollY`, so letting
+   * the page scroll at the same time means one gesture drives two things and
+   * the element's own scroll state fights the document.
+   *
+   * Set false to let the wheel through — appropriate when the element is
+   * inline content rather than a viewport you are driving.
+   */
+  captureScroll?: boolean
+  /**
+   * Keep a drag that starts on the element from selecting text or starting a
+   * native image/link drag on the page. Defaults to true, because a drag on a
+   * canvas is almost always a gesture rather than a selection.
+   */
+  captureDrag?: boolean
   onClick?: (e: MouseEvent) => void
   onDoubleClick?: (e: MouseEvent) => void
   onMove?: (e: MouseEvent) => void
@@ -43,6 +59,8 @@ export class SuperMouse {
   scrollScale: number
   updateScale: number
   dragThreshold: number
+  captureScroll: boolean
+  captureDrag: boolean
 
   onClick?: (e: MouseEvent) => void
   onDoubleClick?: (e: MouseEvent) => void
@@ -74,6 +92,8 @@ export class SuperMouse {
     scrollScale,
     updateScale,
     dragThreshold,
+    captureScroll,
+    captureDrag,
     onClick,
     onDoubleClick,
     onMove,
@@ -92,6 +112,8 @@ export class SuperMouse {
     this.scrollScale = scrollScale ?? 1
     this.updateScale = updateScale ?? 1
     this.dragThreshold = dragThreshold ?? 3
+    this.captureScroll = captureScroll ?? true
+    this.captureDrag = captureDrag ?? true
 
     this.onClick = onClick
     this.onDoubleClick = onDoubleClick
@@ -108,9 +130,13 @@ export class SuperMouse {
     this.element.addEventListener("mousedown", this.handleClick)
     this.element.addEventListener("mousemove", this.handleMove)
     this.element.addEventListener("dblclick", this.handleDoubleClick)
-    // handleScroll never calls preventDefault, so there is nothing to gain
-    // from making the compositor wait on it
-    this.element.addEventListener("wheel", this.handleScroll, { passive: true })
+    // When capturing, the listener MUST be non-passive — a passive listener's
+    // preventDefault is ignored by the browser, so the page would scroll
+    // anyway. When not capturing, mark it passive so the compositor never
+    // waits on us.
+    this.element.addEventListener("wheel", this.handleScroll, {
+      passive: !this.captureScroll,
+    })
 
     this.element.addEventListener("mouseenter", this.handleEnter)
     this.element.addEventListener("mouseleave", this.handleLeave)
@@ -141,6 +167,11 @@ export class SuperMouse {
   }
 
   handleClick = (e: MouseEvent) => {
+    // Without this, dragging across the element selects the surrounding page
+    // text and can start a native image drag — the gesture leaks out of the
+    // element it was aimed at.
+    if (this.captureDrag) e.preventDefault()
+
     this.buttons[e.button] = true
     this.pressOrigin = { x: e.clientX, y: e.clientY }
     if (this.debug) console.log("SuperMouse.click =>", e, this)
@@ -195,6 +226,10 @@ export class SuperMouse {
   }
 
   handleScroll = (e: WheelEvent) => {
+    // The wheel is driving this element's own scroll state, so the page must
+    // not scroll from the same gesture.
+    if (this.captureScroll) e.preventDefault()
+
     // same inversion and scale as scrollX/scrollY, so all three agree
     this.scrollInertia += (e.deltaY + e.deltaX) * -1 * this.scrollScale
 
