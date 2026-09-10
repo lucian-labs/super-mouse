@@ -133,6 +133,57 @@ Methods: `update(dt)`, `measure(x, y)`, `destroy()`.
 `dt` is in frames, so a dropped frame catches up rather than easing at a
 different rate — `update(4)` lands exactly where four `update(1)` calls would.
 
+## LiquidEdge — a surface that behaves like it has mass
+
+`MouseGravity` says how near the pointer is. `LiquidEdge` says what a surface
+*does* about it: a bulge rises under the cursor, drags behind it as it moves,
+sends waves out along the surface that reflect off the ends, and sloshes back
+and settles when the pointer leaves.
+
+It is a chain of masses, each on a spring toward the height the pointer asks
+for, each coupled to its neighbours. The coupling is what makes it read as one
+body of liquid rather than a row of independent bars.
+
+```ts
+import { MouseGravity, LiquidEdge } from "@dank-inc/super-mouse"
+
+const gravity = new MouseGravity({ target: bar, radius: 190 })
+const liquid = new LiquidEdge({ points: 15 })
+
+const frame = () => {
+  const r = bar.getBoundingClientRect()
+  liquid.drive((gravity.x - r.left) / r.width, gravity.pull)
+  const moving = gravity.update() || liquid.update()
+  path.setAttribute("d", pathFrom(liquid.heights))   // your drawing, its numbers
+  if (moving) requestAnimationFrame(frame)
+}
+```
+
+`heights` is one 0..1 per point, left to right. Draw it however you like — an
+SVG path, a canvas curve, a row of divs; it knows nothing about rendering.
+
+| Option | Default | |
+| --- | --- | --- |
+| `points` | `15` | samples across the surface |
+| `tension` | `0.26` | pull toward the driven shape, per frame |
+| `damping` | `0.14` | velocity bled off per frame — lower rings longer |
+| `coupling` | `0.24` | height traded with neighbours: this is the travelling wave. 0 gives independent springs and no liquid at all |
+| `spread` | `0.26` | width of the bulge, in surface widths |
+| `slosh` | `1.4` | how hard a sideways move throws it around |
+| `pinEnds` | `true` | ends held at 0, like liquid in a channel |
+
+State: `heights`, `velocities`, `peak`, `amplitude`, `settled`.
+Methods: `drive(u, amount)`, `splash(u, impulse)`, `update(dt)`, `reset()`.
+
+`peak` is the true maximum and goes negative on the rebound when the ends are
+free; with `pinEnds` it bottoms out at 0, since the pinned ends are then the
+highest thing on a dipped surface. For "how much is happening" in either
+direction, read `amplitude`.
+
+`update()` returns false the moment the surface is flat and still, so the render
+loop can stop instead of idling. A `dt` above 1 is integrated in whole-frame
+substeps — a spring solved in one big step does not converge, it explodes.
+
 ## Mousewheel + Mouse Inertia
 
 ![](scroll-inertia-demo.gif)

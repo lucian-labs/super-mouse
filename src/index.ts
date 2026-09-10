@@ -1,3 +1,5 @@
+export { LiquidEdge } from "./liquid"
+export type { LiquidEdgeParams } from "./liquid"
 export { MouseGravity, smoothstep, easeInQuad, linear } from "./gravity"
 export type { MouseGravityParams } from "./gravity"
 
