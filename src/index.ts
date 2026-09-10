@@ -1,3 +1,6 @@
+export { MouseGravity, smoothstep, easeInQuad, linear } from "./gravity"
+export type { MouseGravityParams } from "./gravity"
+
 export type SuperMouseParams = {
   element: HTMLElement
   /**

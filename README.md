@@ -90,6 +90,49 @@ Buttons and keys are cleared on window `blur`, so alt-tabbing mid-press does not
 - `update(dt = 1)` — decays both inertia values by `0.97 ** (dt * updateScale)`. `dt` is in frames, where `1` is one 60fps frame; pass your own frame delta for frame-rate-independent decay.
 - `destroy()` — removes every listener the constructor added. Call it on unmount or hot reload.
 
+## MouseGravity — reaching out before contact
+
+`SuperMouse` is bound to an element and only hears the pointer while it is over
+that element. `MouseGravity` is the other half: it listens on the window and
+tells you how *near* the pointer is to something it may never touch. That is
+what you need to make a thing greet the cursor — a dock tab rising to meet it,
+a button swelling, a field leaning.
+
+```ts
+import { MouseGravity } from "@dank-inc/super-mouse"
+
+const gravity = new MouseGravity({ target: tab, radius: 200, axis: "y" })
+
+const frame = () => {
+  const moving = gravity.update()
+  tab.style.setProperty("--rise", `${gravity.pull * 16}px`)
+  if (moving) requestAnimationFrame(frame)   // stops itself when it settles
+}
+requestAnimationFrame(frame)
+```
+
+`pull` is 1 with the pointer on the target, 0 at `radius` and beyond, and eased
+between the two. `update()` returns false once there is nothing left to render,
+so the rAF loop can end rather than idling forever.
+
+| Option | Default | |
+| --- | --- | --- |
+| `target` | — | the element being attracted to |
+| `radius` | `220` | px at which the pull begins |
+| `from` | `"edge"` | measure to the nearest edge, or `"centre"`. Edge keeps a wide bar equally near along its whole length |
+| `axis` | `"both"` | `"y"` answers "how far above it are you", ignoring sideways distance |
+| `falloff` | `smoothstep` | maps 0..1 nearness onto 0..1 pull; `easeInQuad` and `linear` also exported |
+| `stiffness` | `0.18` | fraction of the gap closed per frame — low is syrup, high is snap |
+| `respectReducedMotion` | `true` | hold at 0 when the OS asks for reduced motion |
+| `ignoreTouch` | `true` | a finger has no hover, and gravity from one makes the target lunge out from under it |
+| `onChange` | — | fired from `update()` when the smoothed value actually moves |
+
+State: `pull`, `targetPull`, `distance`, `x`, `y`, `seen`.
+Methods: `update(dt)`, `measure(x, y)`, `destroy()`.
+
+`dt` is in frames, so a dropped frame catches up rather than easing at a
+different rate — `update(4)` lands exactly where four `update(1)` calls would.
+
 ## Mousewheel + Mouse Inertia
 
 ![](scroll-inertia-demo.gif)
